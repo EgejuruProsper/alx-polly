@@ -1,0 +1,34 @@
+# Polling App Rules
+# Format: Cursor Rules (you can adapt to Trae or Zed if you prefer)
+
+rules:
+  - name: Folder Structure
+    description: >
+      All source code must be organized under `/app/`.
+      - Poll-related components, pages, and logic go in `/app/polls/`
+      - API endpoints and services go in `/app/api/`
+      - Reusable UI components go in `/app/components/`
+
+  - name: Form Handling
+    description: >
+      Always use `react-hook-form` for form state management.
+      Use `shadcn/ui` components for inputs, buttons, and layout.
+
+  - name: Database & Auth
+    description: >
+      Use Supabase for authentication and database operations.
+      - User sessions should be checked on every protected route.
+      - All poll data must be stored in the `polls` table with fields: `id`, `question`, `options[]`, `votes[]`, `created_at`.
+
+  - name: API Conventions
+    description: >
+      Follow RESTful conventions for API routes inside `/app/api/`.
+      Example routes:
+      - `POST /api/polls` → create new poll
+      - `GET /api/polls/:id` → fetch poll details
+      - `POST /api/polls/:id/vote` → submit a vote
+
+  - name: Testing & Review
+    description: >
+      Every new component must include at least one test (unit or integration).
+      Use the AI assistant to scaffold or refactor, then manually review if it follows these rules.
