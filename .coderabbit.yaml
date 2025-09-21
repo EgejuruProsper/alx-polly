@@ -1,0 +1,69 @@
+language: en
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  security_scanning:
+    enabled: true
+    scan_dependencies: true
+    scan_secrets: true
+    vulnerability_alerts: true
+    sast_enabled: true
+
+  ai_suggestions:
+    enabled: true
+    features:
+      - code_optimization
+      - security_best_practices
+      - performance_improvements
+      - accessibility_enhancements
+      - test_coverage
+
+  severity:
+    critical:
+      - security_vulnerabilities
+      - authentication_bypass
+      - data_exposure
+    high:
+      - insecure_dependencies
+      - performance_issues
+    medium:
+      - type_safety_concerns
+      - accessibility_issues
+    low:
+      - documentation_missing
+      - naming_conventions
+
+paths:
+  - path: "app/**/*.tsx"
+    instructions: |
+      - Optimize React component structure
+      - Enforce accessibility and theme support
+      - Secure props and event handlers
+
+  - path: "app/lib/actions/*.ts"
+    instructions: |
+      - Validate inputs and handle errors
+      - Check authentication and rate limiting
+      - Optimize DB queries
+
+  - path: "lib/supabase/*.ts"
+    instructions: |
+      - Review DB queries and encryption
+      - Watch for sensitive data leaks
+      
+  - path: "app/**/*.tsx"
+    instructions: |
+      - Optimize hooks structure, accessibility, and prop validation.
+  - path: "app/lib/**/*.ts"
+    instructions: |
+      - Validate inputs and map errors to proper HTTP codes.
+      - Keep business logic pure and testable.
+  - path: "app/api/**/*.ts"
+    instructions: |
+      - Keep handlers thin; no DB errors in responses.
+      - Enforce auth and Zod validation.

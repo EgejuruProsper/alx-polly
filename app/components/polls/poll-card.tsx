@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
+import { CopyPollLink } from "./copy-poll-link";
 
 interface PollCardProps {
   poll: Poll;
@@ -121,11 +122,14 @@ export function PollCard({ poll, onVote, onDelete, currentUserId, showVoteButton
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-2">
-          <Link href={`/polls/${poll.id}`}>
-            <Button variant="outline" size="sm">
-              View Details
-            </Button>
-          </Link>
+          <div className="flex items-center space-x-2">
+            <Link href={`/polls/${poll.id}`}>
+              <Button variant="outline" size="sm">
+                View Details
+              </Button>
+            </Link>
+            <CopyPollLink pollId={poll.id} size="sm" />
+          </div>
           
           {showVoteButton && poll.is_active && !isExpired && (
             <Button 

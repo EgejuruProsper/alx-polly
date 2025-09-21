@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/app/components/ui/avatar"
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Poll } from "@/types";
 import { formatDistanceToNow } from "date-fns";
-import { Share2, Copy, Check } from "lucide-react";
+import { Share2 } from "lucide-react";
+import { CopyPollLink } from "./copy-poll-link";
 
 interface PollDetailsProps {
   poll: Poll;
@@ -18,7 +19,6 @@ interface PollDetailsProps {
 }
 
 export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollDetailsProps) {
-  const [copied, setCopied] = useState(false);
   const totalVotes = poll.options.reduce((sum, option) => sum + option.votes, 0);
   const isExpired = poll.expires_at && new Date() > new Date(poll.expires_at);
   const canVote = poll.is_active && !isExpired && !userVote;
@@ -37,15 +37,7 @@ export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollD
     } else {
       // Fallback to clipboard
       await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
-  };
-
-  const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -67,14 +59,7 @@ export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollD
                 <Share2 className="h-4 w-4 mr-2" />
                 Share
               </Button>
-              <Button variant="outline" size="sm" onClick={handleCopyLink}>
-                {copied ? (
-                  <Check className="h-4 w-4 mr-2" />
-                ) : (
-                  <Copy className="h-4 w-4 mr-2" />
-                )}
-                {copied ? "Copied!" : "Copy Link"}
-              </Button>
+              <CopyPollLink pollId={poll.id} />
             </div>
           </div>
           
