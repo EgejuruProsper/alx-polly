@@ -1,8 +1,13 @@
 import { createPollSchema, type CreatePollFormData } from './validations';
-import { supabase } from '@/app/lib/supabase';
+import { supabase } from '@/lib/supabase-client';
 import { Poll, User } from '@/types';
 
-// Service result types
+/**
+ * Service result types for consistent API responses
+ * 
+ * WHY: Standardizes error handling and success responses across all service methods.
+ * Prevents inconsistent error formats and makes error handling predictable.
+ */
 export interface ServiceResult<T> {
   success: boolean;
   data?: T;
@@ -23,10 +28,39 @@ export interface VoteData {
   userId: string;
 }
 
-// Poll Service Class
+/**
+ * PollService
+ * -----------
+ * Centralized service for poll operations with business logic and data validation.
+ * 
+ * WHY: Encapsulates poll-related business logic, validation, and data access.
+ * Provides consistent interface for API routes and prevents code duplication.
+ * 
+ * Security considerations:
+ * - All operations require server-side user ID (never from client)
+ * - Input validation with Zod schemas
+ * - PII protection in data transformation
+ * - Database operations with proper error handling
+ */
 export class PollService {
   /**
-   * Create a new poll
+   * Create a new poll for the authenticated user
+   * 
+   * WHY: Centralizes poll creation with validation and ownership enforcement.
+   * Prevents client tampering and ensures data integrity.
+   * 
+   * Assumptions:
+   * - userId is trusted server-side value (never from client)
+   * - pollData is validated by Zod schema before calling this method
+   * 
+   * Edge cases:
+   * - Database connection errors → ServiceResult with error
+   * - Validation errors → handled by calling code
+   * - User not found → handled by database constraints
+   * 
+   * @param pollData - Validated poll data from Zod schema
+   * @param userId - Server-side authenticated user ID
+   * @returns ServiceResult with created poll or error
    */
   static async createPoll(pollData: CreatePollFormData, userId: string): Promise<ServiceResult<Poll>> {
     try {
@@ -70,7 +104,24 @@ export class PollService {
   }
 
   /**
-   * Fetch polls with filtering and pagination
+   * Fetch polls with filtering, sorting, and pagination
+   * 
+   * WHY: Provides secure access to public polls with proper filtering and pagination.
+   * Prevents data exposure and resource exhaustion through proper bounds checking.
+   * 
+   * Security considerations:
+   * - Only returns public polls (is_public = true)
+   * - No PII exposure (emails removed from author data)
+   * - Pagination prevents large data dumps
+   * - Search filtering prevents injection attacks
+   * 
+   * Edge cases:
+   * - Invalid filters → handled by validation layer
+   * - Database errors → ServiceResult with error
+   * - Empty results → returns empty array (not error)
+   * 
+   * @param filters - Filtering, sorting, and pagination options
+   * @returns ServiceResult with poll list or error
    */
   static async getPolls(filters: PollFilters = {}): Promise<ServiceResult<Poll[]>> {
     try {

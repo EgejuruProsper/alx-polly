@@ -13,6 +13,12 @@ import { Badge } from "@/app/components/ui/badge";
 import { createPollSchema, type CreatePollFormData } from "@/lib/validations";
 import { Plus, X, AlertCircle, CheckCircle2 } from "lucide-react";
 
+/**
+ * CreatePollFormProps interface
+ * 
+ * WHY: Defines the contract for the CreatePollForm component.
+ * Ensures type safety and clear component API.
+ */
 interface CreatePollFormProps {
   onSubmit: (data: CreatePollFormData) => Promise<void>;
   isLoading?: boolean;
@@ -21,11 +27,36 @@ interface CreatePollFormProps {
   defaultValues?: CreatePollFormData;
 }
 
+/**
+ * CreatePollForm Component
+ * ------------------------
+ * Controlled form for creating and editing polls with comprehensive validation.
+ * 
+ * WHY: Centralizes poll creation logic with client-side validation and UX enhancements.
+ * Provides real-time feedback and prevents invalid submissions.
+ * 
+ * Features:
+ * - Real-time validation with Zod schema
+ * - Dynamic option management (add/remove)
+ * - Progress tracking and visual feedback
+ * - Duplicate option prevention
+ * - Accessibility support
+ * 
+ * Accessibility considerations:
+ * - Proper label associations with htmlFor/id
+ * - Keyboard navigation support
+ * - Screen reader friendly error messages
+ * - Focus management on validation errors
+ * 
+ * @param props - Component props including onSubmit handler and state
+ */
 export function CreatePollForm({ onSubmit, isLoading = false, error, success, defaultValues }: CreatePollFormProps) {
+  // State for managing dynamic options and form validation
   const [newOption, setNewOption] = useState("");
   const [hasEmptyOptions, setHasEmptyOptions] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
 
+  // React Hook Form setup with Zod validation
   const {
     register,
     handleSubmit,
@@ -36,82 +67,87 @@ export function CreatePollForm({ onSubmit, isLoading = false, error, success, de
     reset,
     trigger,
   } = useForm<CreatePollFormData>({
-    resolver: zodResolver(createPollSchema),
-    mode: "onChange", // Enable real-time validation
+    resolver: zodResolver(createPollSchema), // Client-side validation matches server
+    mode: "onChange", // Enable real-time validation for better UX
     defaultValues: defaultValues || {
       title: "",
       description: "",
-      options: ["", ""],
+      options: ["", ""], // Minimum 2 options required
       isPublic: true,
       allowMultipleVotes: false,
     },
   });
 
-  // Update form when defaultValues change (for editing)
+  // Update form when defaultValues change (for editing existing polls)
   useEffect(() => {
     if (defaultValues) {
       reset(defaultValues);
     }
   }, [defaultValues, reset]);
 
-  // Watch for empty options
+  // Watch for empty options to provide real-time feedback
   const watchedOptions = watch("options");
   useEffect(() => {
     const hasEmpty = watchedOptions?.some((option: string) => !option?.trim());
     setHasEmptyOptions(hasEmpty);
   }, [watchedOptions]);
 
-  // Calculate form completion percentage
+  // Calculate form completion percentage for progress indicator
   const calculateFormProgress = () => {
     const title = watch("title")?.trim();
     const options = watch("options");
     const validOptions = options?.filter(opt => opt?.trim()).length || 0;
     
+    // Weighted progress calculation
     let progress = 0;
-    if (title) progress += 25;
-    if (validOptions >= 2) progress += 50;
-    if (validOptions >= 3) progress += 15;
-    if (validOptions >= 4) progress += 10;
+    if (title) progress += 25; // Title is essential
+    if (validOptions >= 2) progress += 50; // Minimum 2 options required
+    if (validOptions >= 3) progress += 15; // Bonus for more options
+    if (validOptions >= 4) progress += 10; // Additional bonus
     
     return Math.min(progress, 100);
   };
 
   const formProgress = calculateFormProgress();
 
+  // Dynamic field array for poll options
   const { fields, append, remove } = useFieldArray({
     control,
     name: "options"
   } as any);
 
+  // Add new option with validation
   const addOption = () => {
     if (newOption.trim() && fields.length < 10) {
       append(newOption.trim() as any);
       setNewOption("");
-      // Trigger validation after adding option
+      // Trigger validation after adding option to update form state
       setTimeout(() => trigger("options"), 100);
     }
   };
 
+  // Remove option (minimum 2 options required)
   const removeOption = (index: number) => {
     if (fields.length > 2) {
       remove(index);
-      // Trigger validation after removing option
+      // Trigger validation after removing option to update form state
       setTimeout(() => trigger("options"), 100);
     }
   };
 
+  // Form submission handler with additional validation
   const handleFormSubmit = async (data: CreatePollFormData) => {
     // Clear previous custom errors
     setCustomError(null);
 
-    // Additional client-side validation
+    // Additional client-side validation beyond Zod schema
     const hasEmptyOptions = data.options.some((option: string) => !option.trim());
     if (hasEmptyOptions) {
       setCustomError("Please fill in all poll options. Empty options are not allowed.");
       return;
     }
 
-    // Check for duplicate options
+    // Check for duplicate options (case-insensitive)
     const uniqueOptions = new Set(data.options.map((option: string) => option.trim().toLowerCase()));
     if (uniqueOptions.size !== data.options.length) {
       setCustomError("Duplicate options are not allowed. Please make each option unique.");
@@ -122,6 +158,7 @@ export function CreatePollForm({ onSubmit, isLoading = false, error, success, de
       await onSubmit(data);
     } catch (err) {
       // Error handling is done in the parent component
+      // This prevents unhandled promise rejections
     }
   };
 

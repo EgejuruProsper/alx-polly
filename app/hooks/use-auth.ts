@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { AuthService, AuthUser, SignInCredentials, SignUpData, UpdateProfileData } from '@/lib/auth-service';
-import { supabase } from '@/app/lib/supabase';
+import { supabase } from '@/lib/supabase-client';
 
 interface UseAuthReturn {
   user: AuthUser | null;

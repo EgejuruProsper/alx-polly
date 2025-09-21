@@ -2,9 +2,20 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User, AuthState } from "@/types";
-import { supabase } from "@/app/lib/supabase";
+import { supabase } from "@/lib/supabase-client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
+/**
+ * Authentication context interface
+ * 
+ * WHY: Provides centralized authentication state and methods across the app.
+ * Eliminates prop drilling and ensures consistent auth handling.
+ * 
+ * Security considerations:
+ * - No sensitive data stored in context (tokens handled by Supabase)
+ * - Server-side session validation for protected operations
+ * - Client-side state for UI purposes only
+ */
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
@@ -18,12 +29,30 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+/**
+ * AuthProvider
+ * ------------
+ * Provides authentication state and methods to the entire application.
+ * 
+ * WHY: Centralizes authentication logic and provides consistent auth state.
+ * Handles session persistence and automatic auth state updates.
+ * 
+ * Security considerations:
+ * - Session tokens managed by Supabase (httpOnly cookies)
+ * - No sensitive data stored in React state
+ * - Server-side validation required for protected operations
+ * 
+ * Edge cases:
+ * - Session expiration → automatic logout
+ * - Network errors → handled gracefully
+ * - Invalid tokens → cleared from state
+ */
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
+    // Get initial session on app load
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -34,7 +63,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     getInitialSession();
 
-    // Listen for auth changes
+    // Listen for auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user) {
@@ -46,6 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     );
 
+    // Cleanup subscription on unmount
     return () => subscription.unsubscribe();
   }, []);
 
