@@ -74,11 +74,43 @@ export class ApiResponse {
  * Handle API errors consistently
  */
 export function handleApiError(error: unknown, defaultMessage = 'An error occurred') {
-  console.error('API Error:', error);
+  // Log error for monitoring (sanitized)
+  console.error('API Error:', {
+    message: error instanceof Error ? error.message : 'Unknown error',
+    timestamp: new Date().toISOString(),
+    // Don't log stack traces in production
+    ...(process.env.NODE_ENV === 'development' && error instanceof Error ? { stack: error.stack } : {})
+  });
   
+  // Return sanitized error message
   if (error instanceof Error) {
-    return ApiResponse.error(error.message);
+    // Sanitize error messages to prevent information disclosure
+    const sanitizedMessage = sanitizeErrorMessage(error.message);
+    return ApiResponse.error(sanitizedMessage);
   }
   
   return ApiResponse.serverError(defaultMessage);
+}
+
+/**
+ * Sanitize error messages to prevent information disclosure
+ */
+function sanitizeErrorMessage(message: string): string {
+  // Remove database-specific error details
+  const sanitized = message
+    .replace(/password[=:]\s*\S+/gi, 'password=***')
+    .replace(/connection[=:]\s*\S+/gi, 'connection=***')
+    .replace(/database[=:]\s*\S+/gi, 'database=***')
+    .replace(/host[=:]\s*\S+/gi, 'host=***')
+    .replace(/port[=:]\s*\S+/gi, 'port=***')
+    .replace(/user[=:]\s*\S+/gi, 'user=***')
+    .replace(/at line \d+/gi, 'at line ***')
+    .replace(/position \d+/gi, 'position ***');
+  
+  // If message contains sensitive patterns, return generic message
+  if (message.includes('password') || message.includes('connection') || message.includes('database')) {
+    return 'An error occurred while processing your request';
+  }
+  
+  return sanitized;
 }

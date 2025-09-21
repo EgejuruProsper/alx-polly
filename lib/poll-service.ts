@@ -82,14 +82,13 @@ export class PollService {
         userId
       } = filters;
 
-      // Build query
+      // Build query - Remove PII exposure
       let query = supabase
         .from('polls')
         .select(`
           *,
           author:created_by (
             id,
-            email,
             raw_user_meta_data
           )
         `)
@@ -150,7 +149,6 @@ export class PollService {
           *,
           author:created_by (
             id,
-            email,
             raw_user_meta_data
           )
         `)
@@ -374,8 +372,7 @@ export class PollService {
       description: poll.description,
       author: {
         id: poll.author?.id || poll.created_by,
-        name: poll.author?.raw_user_meta_data?.name || poll.author?.email || 'Unknown User',
-        email: poll.author?.email || '',
+        name: poll.author?.raw_user_meta_data?.name || 'Anonymous User',
         createdAt: new Date(poll.created_at),
         updatedAt: new Date(poll.created_at)
       }

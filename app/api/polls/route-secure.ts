@@ -1,13 +1,8 @@
 import { NextRequest } from 'next/server'
 import { PollService } from '@/lib/poll-service'
 import { ApiResponse, extractQueryParams, handleApiError, getAuthenticatedUser, parseRequestBody } from '@/lib/api-utils'
-import { createPollSchema } from '@/lib/validations'
 import { z } from 'zod'
 import { rateLimit } from '@/lib/rate-limiter'
-
-// Rate limiting configuration
-const pollCreationLimiter = rateLimit({ windowMs: 60000, maxRequests: 5 }); // 5 polls per minute
-const pollFetchLimiter = rateLimit({ windowMs: 60000, maxRequests: 100 }); // 100 requests per minute
 
 // Input validation schemas
 const queryParamsSchema = z.object({
@@ -17,7 +12,20 @@ const queryParamsSchema = z.object({
   offset: z.number().int().min(0).max(10000).default(0)
 });
 
-// GET /api/polls - Fetch all polls
+const createPollSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(1000).optional(),
+  options: z.array(z.string().trim().min(1).max(100)).min(2).max(10),
+  isPublic: z.boolean(),
+  allowMultipleVotes: z.boolean(),
+  expiresAt: z.date().optional()
+});
+
+// Rate limiting configuration
+const pollCreationLimiter = rateLimit({ windowMs: 60000, maxRequests: 5 }); // 5 polls per minute
+const pollFetchLimiter = rateLimit({ windowMs: 60000, maxRequests: 100 }); // 100 requests per minute
+
+// GET /api/polls - Fetch all polls (SECURE VERSION)
 export async function GET(request: NextRequest) {
   try {
     // Apply rate limiting
@@ -53,14 +61,14 @@ export async function GET(request: NextRequest) {
         }
       });
     } else {
-      return ApiResponse.error(result.error || 'Failed to fetch polls');
+      return ApiResponse.error('Failed to fetch polls');
     }
   } catch (error) {
     return handleApiError(error, 'Failed to fetch polls');
   }
 }
 
-// POST /api/polls - Create new poll
+// POST /api/polls - Create new poll (SECURE VERSION)
 export async function POST(request: NextRequest) {
   try {
     // Apply rate limiting
@@ -69,16 +77,16 @@ export async function POST(request: NextRequest) {
       return ApiResponse.error('Too many requests', 429);
     }
 
-    const { user, error: authError } = await getAuthenticatedUser(request)
+    const { user, error: authError } = await getAuthenticatedUser(request);
     
     if (authError || !user) {
-      return ApiResponse.unauthorized(authError)
+      return ApiResponse.unauthorized(authError);
     }
 
-    const { data: pollData, error: parseError } = await parseRequestBody(request)
+    const { data: pollData, error: parseError } = await parseRequestBody(request);
 
     if (parseError || !pollData) {
-      return ApiResponse.error(parseError || 'Invalid request body')
+      return ApiResponse.error(parseError || 'Invalid request body');
     }
 
     // Validate poll data with Zod schema
@@ -87,14 +95,15 @@ export async function POST(request: NextRequest) {
       return ApiResponse.error('Invalid poll data: ' + validationResult.error.errors.map(e => e.message).join(', '), 400);
     }
 
-    const result = await PollService.createPoll(validationResult.data, user.id)
+    // Remove dangerous type casting - use validated data
+    const result = await PollService.createPoll(validationResult.data, user.id);
 
     if (result.success && result.data) {
-      return ApiResponse.success({ poll: result.data }, 201)
+      return ApiResponse.success({ poll: result.data }, 201);
     } else {
-      return ApiResponse.error(result.error || 'Failed to create poll')
+      return ApiResponse.error(result.error || 'Failed to create poll');
     }
   } catch (error) {
-    return handleApiError(error, 'Failed to create poll')
+    return handleApiError(error, 'Failed to create poll');
   }
 }
