@@ -46,11 +46,14 @@ export function AdminDashboard({ currentUser }: AdminDashboardProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('users');
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
 
-  // Load users on component mount
+  // Load users on component mount and when page/pageSize changes
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [currentPage, pageSize]);
 
   /**
    * Load users with pagination
@@ -63,10 +66,12 @@ export function AdminDashboard({ currentUser }: AdminDashboardProps) {
     setError(null);
 
     try {
-      const result = await UserRoleService.getAllUsers(currentUser.id, 50, 0);
+      const offset = currentPage * pageSize;
+      const result = await UserRoleService.getAllUsers(currentUser.id, pageSize, offset);
       
       if (result.success && result.data) {
-        setUsers(result.data);
+        setUsers(result.data.users);
+        setTotalCount(result.data.totalCount);
       } else {
         setError(result.error || 'Failed to load users');
       }
@@ -104,7 +109,7 @@ export function AdminDashboard({ currentUser }: AdminDashboardProps) {
   };
 
   // Calculate system metrics
-  const totalUsers = users.length;
+  const totalUsers = totalCount;
   const activeUsers = users.filter(user => user.isActive).length;
   const adminUsers = users.filter(user => user.role === 'admin').length;
   const moderatorUsers = users.filter(user => user.role === 'moderator').length;
@@ -254,6 +259,52 @@ export function AdminDashboard({ currentUser }: AdminDashboardProps) {
                       </div>
                     </div>
                   ))}
+                  
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <div className="flex items-center space-x-2">
+                      <label htmlFor="pageSize" className="text-sm text-muted-foreground">
+                        Users per page:
+                      </label>
+                      <select
+                        id="pageSize"
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setCurrentPage(0); // Reset to first page
+                        }}
+                        className="px-2 py-1 border rounded text-sm"
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                        disabled={currentPage === 0 || isLoading}
+                      >
+                        Previous
+                      </Button>
+                      
+                      <span className="text-sm text-muted-foreground">
+                        Page {currentPage + 1} of {Math.ceil(totalCount / pageSize)}
+                      </span>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        disabled={currentPage >= Math.ceil(totalCount / pageSize) - 1 || isLoading}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>

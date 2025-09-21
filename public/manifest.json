@@ -8,12 +8,6 @@
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
   "scope": "/",
-  "orientation": "portrait",
-  "theme_color": "#3b82f6",
-  "background_color": "#ffffff",
-  "display": "standalone",
-  "scope": "/",
-  "start_url": "/",
   "icons": [
     {
       "src": "/icons/icon-72x72.png",

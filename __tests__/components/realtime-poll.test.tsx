@@ -214,7 +214,7 @@ describe('RealtimePoll', () => {
     });
   });
 
-  it('should clean up subscriptions on unmount', () => {
+  it('should clean up subscriptions on unmount', async () => {
     const { RealtimeService } = await import('@/lib/services/realtime-service');
     const mockUnsubscribe = vi.fn();
     

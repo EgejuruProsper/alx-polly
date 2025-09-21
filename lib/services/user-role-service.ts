@@ -155,8 +155,10 @@ export class UserRoleService {
   static async getAllUsers(
     requesterId: string,
     limit: number = 50,
-    offset: number = 0
-  ): Promise<ServiceResult<UserProfile[]>> {
+    offset: number = 0,
+    role?: string,
+    search?: string
+  ): Promise<ServiceResult<{ users: UserProfile[]; totalCount: number }>> {
     try {
       // Verify permissions
       const requesterProfile = await this.getUserProfile(requesterId);
@@ -168,7 +170,7 @@ export class UserRoleService {
         return { success: false, error: 'Insufficient permissions' };
       }
 
-      const { data: users, error } = await supabase
+      let query = supabase
         .from('user_profiles')
         .select(`
           id,
@@ -180,7 +182,18 @@ export class UserRoleService {
           updated_at,
           last_active_at,
           is_active
-        `)
+        `, { count: 'exact' });
+
+      // Apply filters
+      if (role) {
+        query = query.eq('role', role);
+      }
+      
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      }
+
+      const { data: users, count, error } = await query
         .range(offset, offset + limit - 1)
         .order('created_at', { ascending: false });
 
@@ -201,7 +214,13 @@ export class UserRoleService {
         isActive: user.is_active,
       }));
 
-      return { success: true, data: userProfiles };
+      return { 
+        success: true, 
+        data: { 
+          users: userProfiles, 
+          totalCount: count || 0 
+        } 
+      };
     } catch (error) {
       console.error('Error fetching users:', error);
       return { success: false, error: 'Failed to fetch users' };

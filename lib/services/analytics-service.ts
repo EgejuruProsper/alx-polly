@@ -119,9 +119,9 @@ export class AnalyticsService {
 
       // Get system metrics
       const [
-        { data: totalPolls },
-        { data: totalUsers },
-        { data: totalVotes },
+        { data: totalPolls, count: pollsCount },
+        { data: totalUsers, count: usersCount },
+        { data: totalVotes, count: votesCount },
         { data: recentPolls },
         { data: topPolls }
       ] = await Promise.all([
@@ -149,9 +149,9 @@ export class AnalyticsService {
         .order('created_at', { ascending: true });
 
       const systemAnalytics: SystemAnalytics = {
-        totalPolls: totalPolls?.length || 0,
-        totalUsers: totalUsers?.length || 0,
-        totalVotes: totalVotes?.length || 0,
+        totalPolls: pollsCount || 0,
+        totalUsers: usersCount || 0,
+        totalVotes: votesCount || 0,
         recentPolls: recentPolls || [],
         topPolls: topPolls || [],
         dailyActivity: this.processDailyActivity(dailyActivity || []),
@@ -209,12 +209,17 @@ export class AnalyticsService {
     votes: any[],
     analytics: any[]
   ): PollAnalytics {
+    // Safely handle potentially undefined fields
+    const options = poll.options || [];
+    const pollVotes = poll.votes || [];
+    const totalVotes = poll.total_votes || 0;
+    
     // Calculate voting distribution
-    const voteDistribution = poll.options.map((_: any, index: number) => ({
-      option: poll.options[index],
-      votes: poll.votes[index] || 0,
-      percentage: poll.total_votes > 0 ? 
-        Math.round((poll.votes[index] || 0) / poll.total_votes * 100) : 0
+    const voteDistribution = options.map((_: any, index: number) => ({
+      option: options[index],
+      votes: pollVotes[index] || 0,
+      percentage: totalVotes > 0 ? 
+        Math.round((pollVotes[index] || 0) / totalVotes * 100) : 0
     }));
 
     // Calculate engagement metrics

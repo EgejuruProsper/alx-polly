@@ -58,16 +58,82 @@ export function QRCodeGenerator({ pollId, pollTitle, className }: QRCodeGenerato
   const [customUrl, setCustomUrl] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Generate poll URL
-  const pollUrl = customUrl || `${window.location.origin}/polls/${pollId}`;
+  // Generate poll URL with validation
+  const pollUrl = (() => {
+    if (!customUrl) {
+      return `${window.location.origin}/polls/${pollId}`;
+    }
+    
+    try {
+      // Validate and normalize the custom URL
+      const url = new URL(customUrl, window.location.origin);
+      
+      // Only allow http and https protocols
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        console.warn('Invalid protocol in custom URL, falling back to default');
+        return `${window.location.origin}/polls/${pollId}`;
+      }
+      
+      // Only allow same origin or trusted domains (you can customize this)
+      const allowedOrigins = [window.location.origin];
+      if (!allowedOrigins.some(origin => url.origin === origin)) {
+        console.warn('Custom URL origin not allowed, falling back to default');
+        return `${window.location.origin}/polls/${pollId}`;
+      }
+      
+      return url.toString();
+    } catch (error) {
+      console.warn('Invalid custom URL, falling back to default:', error);
+      return `${window.location.origin}/polls/${pollId}`;
+    }
+  })();
 
   // Generate QR code when component mounts or URL changes
   useEffect(() => {
-    generateQRCode();
+    let isMounted = true;
+    
+    const generateQRCodeSafe = async () => {
+      setIsGenerating(true);
+      setError(null);
+
+      try {
+        const qrSize = getQRSize(size);
+        const qrCodeDataUrl = await QRCode.toDataURL(pollUrl, {
+          width: qrSize,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          },
+          errorCorrectionLevel: 'M'
+        });
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setQrCodeDataUrl(qrCodeDataUrl);
+        }
+      } catch (err) {
+        console.error('Error generating QR code:', err);
+        if (isMounted) {
+          setError('Failed to generate QR code');
+        }
+      } finally {
+        if (isMounted) {
+          setIsGenerating(false);
+        }
+      }
+    };
+
+    generateQRCodeSafe();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [pollUrl, size]);
 
   /**
-   * Generate QR code for the poll URL
+   * Generate QR code for the poll URL (called manually for retry)
    * 
    * WHY: Creates a scannable QR code for easy poll sharing.
    * Provides multiple size options for different use cases.

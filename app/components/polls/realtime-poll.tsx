@@ -61,6 +61,7 @@ export function RealtimePoll({
   const [livePoll, setLivePoll] = useState<Poll>(poll);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [liveStats, setLiveStats] = useState({
     totalVotes: poll.total_votes || 0,
     viewCount: poll.view_count || 0,
@@ -89,12 +90,20 @@ export function RealtimePoll({
 
     const handleVoteUpdate = (payload: any) => {
       console.log('New vote:', payload);
+      
+      // Validate option_index
+      const optionIndex = payload.new.option_index;
+      if (!Number.isFinite(optionIndex) || optionIndex < 0 || optionIndex >= (payload.new.votes?.length || 0)) {
+        console.warn('Invalid option_index in vote update:', optionIndex);
+        return; // Skip invalid vote updates
+      }
+      
       // Update poll with new vote
       setLivePoll(prev => ({
         ...prev,
         total_votes: (prev.total_votes || 0) + 1,
         votes: prev.votes.map((vote, index) => 
-          index === payload.new.option_index ? vote + 1 : vote
+          index === optionIndex ? vote + 1 : vote
         )
       }));
       setLiveStats(prev => ({
@@ -216,7 +225,17 @@ export function RealtimePoll({
           {livePoll.options.map((option, index) => (
             <div key={index} className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{option}</span>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="poll-option"
+                    value={option}
+                    checked={selectedOption === option}
+                    onChange={(e) => setSelectedOption(e.target.value)}
+                    className="h-4 w-4 text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm font-medium">{option}</span>
+                </label>
                 <span className="text-sm text-muted-foreground">
                   {livePoll.votes[index] || 0} votes ({votePercentages[index]}%)
                 </span>
@@ -287,10 +306,11 @@ export function RealtimePoll({
         {isActive && (
           <div className="flex justify-center pt-4">
             <Button 
-              onClick={() => handleVote(livePoll.options[0])}
+              onClick={() => selectedOption && handleVote(selectedOption)}
+              disabled={!selectedOption}
               className="w-full"
             >
-              Vote Now
+              {selectedOption ? 'Vote Now' : 'Select an option to vote'}
             </Button>
           </div>
         )}

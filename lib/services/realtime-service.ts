@@ -23,6 +23,12 @@ import { RealtimeChannel } from '@supabase/supabase-js';
  */
 export class RealtimeService {
   private static channels: Map<string, RealtimeChannel> = new Map();
+  private static subscriptionMetadata: Map<string, {
+    pollId: string;
+    onUpdate: (payload: any) => void;
+    onVote: (payload: any) => void;
+    onError: (error: any) => void;
+  }> = new Map();
 
   /**
    * Subscribe to poll updates
@@ -43,6 +49,14 @@ export class RealtimeService {
     onError: (error: any) => void
   ): RealtimeChannel {
     const channelName = `poll-${pollId}`;
+    
+    // Store subscription metadata for reconnection
+    this.subscriptionMetadata.set(channelName, {
+      pollId,
+      onUpdate,
+      onVote,
+      onError
+    });
     
     // Clean up existing subscription
     if (this.channels.has(channelName)) {
@@ -254,6 +268,7 @@ export class RealtimeService {
     if (channel) {
       channel.unsubscribe();
       this.channels.delete(channelName);
+      this.subscriptionMetadata.delete(channelName);
       console.log(`Unsubscribed from ${channelName}`);
     }
   }
@@ -301,15 +316,78 @@ export class RealtimeService {
   static async reconnectAll(): Promise<void> {
     console.log('Reconnecting to all channels...');
     
-    // Note: In a real implementation, you'd need to store the subscription
-    // callbacks and recreate the subscriptions. This is a simplified version.
+    // Store existing subscription metadata before cleanup
+    const metadataToReconnect = new Map(this.subscriptionMetadata);
     
+    // Clean up existing channels
     this.channels.forEach((channel, channelName) => {
       channel.unsubscribe();
     });
     this.channels.clear();
     
-    // In a real implementation, you'd recreate the subscriptions here
-    console.log('Reconnection completed');
+    // Recreate subscriptions with retry logic
+    const reconnectPromises = Array.from(metadataToReconnect.entries()).map(
+      async ([channelName, metadata]) => {
+        const maxRetries = 3;
+        let retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+          try {
+            console.log(`Reconnecting to ${channelName} (attempt ${retryCount + 1})`);
+            
+            const channel = supabase
+              .channel(channelName)
+              .on(
+                'postgres_changes',
+                {
+                  event: 'UPDATE',
+                  schema: 'public',
+                  table: 'polls',
+                  filter: `id=eq.${metadata.pollId}`
+                },
+                metadata.onUpdate
+              )
+              .on(
+                'postgres_changes',
+                {
+                  event: 'INSERT',
+                  schema: 'public',
+                  table: 'votes',
+                  filter: `poll_id=eq.${metadata.pollId}`
+                },
+                metadata.onVote
+              )
+              .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                  console.log(`Successfully reconnected to ${channelName}`);
+                  this.channels.set(channelName, channel);
+                } else if (status === 'CHANNEL_ERROR') {
+                  console.error(`Failed to reconnect to ${channelName}`);
+                  metadata.onError(new Error(`Failed to reconnect to ${channelName}`));
+                }
+              });
+              
+            // If we get here, the subscription was successful
+            break;
+          } catch (error) {
+            retryCount++;
+            console.error(`Reconnection attempt ${retryCount} failed for ${channelName}:`, error);
+            
+            if (retryCount >= maxRetries) {
+              console.error(`Max retries reached for ${channelName}`);
+              metadata.onError(new Error(`Failed to reconnect to ${channelName} after ${maxRetries} attempts`));
+            } else {
+              // Wait before retrying (exponential backoff)
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+            }
+          }
+        }
+      }
+    );
+    
+    // Wait for all reconnection attempts to complete
+    await Promise.allSettled(reconnectPromises);
+    
+    console.log('Reconnection process completed');
   }
 }

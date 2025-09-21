@@ -103,16 +103,19 @@ export async function GET(request: NextRequest) {
     const result = await UserRoleService.getAllUsers(
       user.id,
       validationResult.data.limit,
-      validationResult.data.offset
+      validationResult.data.offset,
+      validationResult.data.role,
+      validationResult.data.search
     );
 
     if (result.success && result.data) {
       return ApiResponse.success({
-        users: result.data,
+        users: result.data.users,
         pagination: {
           limit: validationResult.data.limit,
           offset: validationResult.data.offset,
-          hasMore: result.data.length === validationResult.data.limit
+          totalCount: result.data.totalCount,
+          hasMore: (validationResult.data.offset + validationResult.data.limit) < result.data.totalCount
         }
       });
     } else {
