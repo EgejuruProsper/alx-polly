@@ -9,6 +9,8 @@ interface PollListProps {
   isLoading?: boolean;
   onVote?: (pollId: string, optionId: string) => void;
   onLoadMore?: () => void;
+  onDelete?: (pollId: string) => void;
+  currentUserId?: string;
   hasMore?: boolean;
 }
 
@@ -17,6 +19,8 @@ export function PollList({
   isLoading = false, 
   onVote, 
   onLoadMore, 
+  onDelete,
+  currentUserId,
   hasMore = false 
 }: PollListProps) {
   if (isLoading && polls.length === 0) {
@@ -64,6 +68,8 @@ export function PollList({
           key={poll.id}
           poll={poll}
           onVote={onVote}
+          onDelete={onDelete}
+          currentUserId={currentUserId}
           showVoteButton={true}
         />
       ))}

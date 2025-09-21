@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { PollCard } from '../poll-card'
+import { PollCard } from '../../../app/components/polls/poll-card'
 import { Poll } from '@/types'
 
 // Mock poll data

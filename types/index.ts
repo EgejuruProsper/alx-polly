@@ -15,10 +15,12 @@ export interface Poll {
   options: string[]; // Array of option strings per rules
   votes: number[]; // Array of vote counts per rules
   created_at: string; // ISO string per rules
-  user_id: string;
+  created_by: string;
   is_public: boolean;
   is_active: boolean;
   expires_at?: string;
+  allow_multiple_votes?: boolean;
+  description?: string;
   author?: User; // Optional for display purposes
 }
 

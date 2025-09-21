@@ -9,73 +9,54 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Poll } from "@/types";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
-
-// Mock data - replace with actual API calls
-const mockPolls: Poll[] = [
-  {
-    id: "1",
-    title: "What's your favorite programming language?",
-    description: "Help us understand the community's preferences",
-    options: [
-      { id: "1-1", text: "JavaScript", votes: 45, pollId: "1" },
-      { id: "1-2", text: "Python", votes: 38, pollId: "1" },
-      { id: "1-3", text: "TypeScript", votes: 25, pollId: "1" },
-      { id: "1-4", text: "Rust", votes: 12, pollId: "1" },
-    ],
-    author: {
-      id: "user-1",
-      name: "John Doe",
-      email: "john@example.com",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    isActive: true,
-    isPublic: true,
-    allowMultipleVotes: false,
-    createdAt: new Date(Date.now() - 86400000), // 1 day ago
-    updatedAt: new Date(),
-  },
-  {
-    id: "2",
-    title: "Which framework do you prefer for web development?",
-    description: "Share your experience with different frameworks",
-    options: [
-      { id: "2-1", text: "React", votes: 60, pollId: "2" },
-      { id: "2-2", text: "Vue", votes: 30, pollId: "2" },
-      { id: "2-3", text: "Angular", votes: 20, pollId: "2" },
-    ],
-    author: {
-      id: "user-2",
-      name: "Jane Smith",
-      email: "jane@example.com",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    isActive: true,
-    isPublic: true,
-    allowMultipleVotes: true,
-    createdAt: new Date(Date.now() - 172800000), // 2 days ago
-    updatedAt: new Date(),
-  },
-];
+import { useAuth } from "@/app/contexts/auth-context";
 
 export default function PollsPage() {
   const [polls, setPolls] = useState<Poll[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  const fetchPolls = async (search?: string, sort?: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (sort) params.append('sortBy', sort);
+      params.append('limit', '20');
+      
+      const response = await fetch(`/api/polls?${params.toString()}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch polls');
+      }
+      
+      const data = await response.json();
+      setPolls(data.polls || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch polls');
+      setPolls([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Simulate API call
-    const loadPolls = async () => {
-      setIsLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setPolls(mockPolls);
-      setIsLoading(false);
-    };
-
-    loadPolls();
+    fetchPolls();
   }, []);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchPolls(searchTerm, sortBy);
+    }, 300); // Debounce search
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, sortBy]);
 
   const handleVote = async (pollId: string, optionId: string) => {
     // TODO: Implement actual voting logic
@@ -87,10 +68,27 @@ export default function PollsPage() {
     console.log("Loading more polls...");
   };
 
-  const filteredPolls = polls.filter(poll =>
-    poll.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    poll.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleDeletePoll = async (pollId: string) => {
+    if (!confirm('Are you sure you want to delete this poll? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/polls/${pollId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete poll');
+      }
+
+      // Remove poll from local state
+      setPolls(prevPolls => prevPolls.filter(poll => poll.id !== pollId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete poll');
+    }
+  };
 
   return (
     <Layout>
@@ -136,12 +134,21 @@ export default function PollsPage() {
             </Select>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+
           {/* Polls List */}
           <PollList
-            polls={filteredPolls}
+            polls={polls}
             isLoading={isLoading}
             onVote={handleVote}
             onLoadMore={handleLoadMore}
+            onDelete={handleDeletePoll}
+            currentUserId={user?.id}
             hasMore={false}
           />
         </div>

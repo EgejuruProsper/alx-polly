@@ -2,11 +2,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User, AuthState } from "@/types";
+import { supabase } from "@/app/lib/supabase";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
 }
 
@@ -21,36 +23,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Implement actual authentication check
-    // For now, simulate loading
-    const timer = setTimeout(() => {
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(transformSupabaseUser(session.user));
+      }
       setIsLoading(false);
-    }, 1000);
+    };
 
-    return () => clearTimeout(timer);
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(transformSupabaseUser(session.user));
+        } else {
+          setUser(null);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  // Helper function to transform Supabase user to our User type
+  const transformSupabaseUser = (supabaseUser: SupabaseUser): User => {
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email || '',
+      name: supabaseUser.user_metadata?.name || supabaseUser.email || 'User',
+      createdAt: new Date(supabaseUser.created_at),
+      updatedAt: new Date(supabaseUser.updated_at || supabaseUser.created_at),
+    };
+  };
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // TODO: Implement actual login logic
-      console.log("Logging in with:", email, password);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock user data
-      const mockUser: User = {
-        id: "1",
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        name: "John Doe",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      setUser(mockUser);
+        password,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        setUser(transformSupabaseUser(data.user));
+      }
     } catch (error) {
-      throw new Error("Login failed");
+      throw new Error(error instanceof Error ? error.message : "Login failed");
     } finally {
       setIsLoading(false);
     }
@@ -59,32 +85,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      // TODO: Implement actual registration logic
-      console.log("Registering with:", name, email, password);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock user data
-      const mockUser: User = {
-        id: "1",
+      const { data, error } = await supabase.auth.signUp({
         email,
-        name,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      setUser(mockUser);
+        password,
+        options: {
+          data: {
+            name: name,
+          },
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        setUser(transformSupabaseUser(data.user));
+      }
     } catch (error) {
-      throw new Error("Registration failed");
+      throw new Error(error instanceof Error ? error.message : "Registration failed");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    // TODO: Clear any stored tokens
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw new Error(error.message);
+      }
+      setUser(null);
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Logout failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const updateProfile = async (data: Partial<User>) => {
@@ -92,15 +129,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     setIsLoading(true);
     try {
-      // TODO: Implement actual profile update logic
-      console.log("Updating profile:", data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          name: data.name,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
       setUser({ ...user, ...data, updatedAt: new Date() });
     } catch (error) {
-      throw new Error("Profile update failed");
+      throw new Error(error instanceof Error ? error.message : "Profile update failed");
     } finally {
       setIsLoading(false);
     }

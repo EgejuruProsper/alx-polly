@@ -7,23 +7,33 @@ import { Button } from "@/app/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/app/components/ui/avatar";
 import { Poll } from "@/types";
 import { formatDistanceToNow } from "date-fns";
+import { Edit, Trash2, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 
 interface PollCardProps {
   poll: Poll;
   onVote?: (pollId: string, optionId: string) => void;
+  onDelete?: (pollId: string) => void;
+  currentUserId?: string;
   showVoteButton?: boolean;
 }
 
-export function PollCard({ poll, onVote, showVoteButton = true }: PollCardProps) {
+export function PollCard({ poll, onVote, onDelete, currentUserId, showVoteButton = true }: PollCardProps) {
   const totalVotes = poll.options.reduce((sum, option) => sum + option.votes, 0);
   const isExpired = poll.expiresAt && new Date() > poll.expiresAt;
+  const isOwner = currentUserId && poll.created_by === currentUserId;
 
   return (
     <Card className="w-full hover:shadow-md transition-shadow">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-lg line-clamp-2">{poll.title}</CardTitle>
+            <CardTitle className="text-lg line-clamp-2">{poll.question}</CardTitle>
             {poll.description && (
               <CardDescription className="line-clamp-2">
                 {poll.description}
@@ -32,21 +42,45 @@ export function PollCard({ poll, onVote, showVoteButton = true }: PollCardProps)
           </div>
           <div className="flex flex-col items-end space-y-2">
             <div className="flex items-center space-x-2">
-              {poll.isPublic ? (
+              {poll.is_public ? (
                 <Badge variant="secondary">Public</Badge>
               ) : (
                 <Badge variant="outline">Private</Badge>
               )}
               {isExpired && <Badge variant="destructive">Expired</Badge>}
+              {isOwner && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href={`/polls/${poll.id}/edit`}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => onDelete?.(poll.id)}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <Avatar className="h-6 w-6">
-                <AvatarImage src={poll.author.avatar} alt={poll.author.name} />
+                <AvatarImage src={poll.author?.avatar} alt={poll.author?.name} />
                 <AvatarFallback className="text-xs">
-                  {poll.author.name.charAt(0).toUpperCase()}
+                  {poll.author?.name?.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <span>{poll.author.name}</span>
+              <span>{poll.author?.name || 'Unknown User'}</span>
             </div>
           </div>
         </div>
@@ -81,7 +115,7 @@ export function PollCard({ poll, onVote, showVoteButton = true }: PollCardProps)
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>{totalVotes} total vote{totalVotes !== 1 ? 's' : ''}</span>
           <span>
-            {formatDistanceToNow(new Date(poll.createdAt), { addSuffix: true })}
+            {formatDistanceToNow(new Date(poll.created_at), { addSuffix: true })}
           </span>
         </div>
 
@@ -93,7 +127,7 @@ export function PollCard({ poll, onVote, showVoteButton = true }: PollCardProps)
             </Button>
           </Link>
           
-          {showVoteButton && poll.isActive && !isExpired && (
+          {showVoteButton && poll.is_active && !isExpired && (
             <Button 
               size="sm" 
               onClick={() => onVote?.(poll.id, poll.options[0].id)}
