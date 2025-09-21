@@ -20,14 +20,14 @@ interface PollDetailsProps {
 export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollDetailsProps) {
   const [copied, setCopied] = useState(false);
   const totalVotes = poll.options.reduce((sum, option) => sum + option.votes, 0);
-  const isExpired = poll.expiresAt && new Date() > poll.expiresAt;
-  const canVote = poll.isActive && !isExpired && !userVote;
+  const isExpired = poll.expires_at && new Date() > new Date(poll.expires_at);
+  const canVote = poll.is_active && !isExpired && !userVote;
 
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: poll.title,
+          title: poll.question,
           text: poll.description,
           url: window.location.href,
         });
@@ -55,7 +55,7 @@ export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollD
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-2">
-              <CardTitle className="text-2xl">{poll.title}</CardTitle>
+              <CardTitle className="text-2xl">{poll.question}</CardTitle>
               {poll.description && (
                 <CardDescription className="text-base">
                   {poll.description}
@@ -82,28 +82,28 @@ export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollD
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={poll.author.avatar} alt={poll.author.name} />
+                  <AvatarImage src={poll.author?.avatar} alt={poll.author?.name || 'User'} />
                   <AvatarFallback>
-                    {poll.author.name.charAt(0).toUpperCase()}
+                    {poll.author?.name?.charAt(0).toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm text-muted-foreground">
-                  by {poll.author.name}
+                  by {poll.author?.name || 'Unknown User'}
                 </span>
               </div>
               <span className="text-sm text-muted-foreground">
-                {formatDistanceToNow(new Date(poll.createdAt), { addSuffix: true })}
+                {formatDistanceToNow(new Date(poll.created_at), { addSuffix: true })}
               </span>
             </div>
             
             <div className="flex items-center space-x-2">
-              {poll.isPublic ? (
+              {poll.is_public ? (
                 <Badge variant="secondary">Public</Badge>
               ) : (
                 <Badge variant="outline">Private</Badge>
               )}
               {isExpired && <Badge variant="destructive">Expired</Badge>}
-              {!poll.isActive && <Badge variant="outline">Inactive</Badge>}
+              {!poll.is_active && <Badge variant="outline">Inactive</Badge>}
             </div>
           </div>
         </CardHeader>
@@ -115,7 +115,7 @@ export function PollDetails({ poll, onVote, userVote, isLoading = false }: PollD
           <CardTitle>Vote Options</CardTitle>
           <CardDescription>
             {totalVotes} total vote{totalVotes !== 1 ? 's' : ''}
-            {poll.allowMultipleVotes && " • Multiple votes allowed"}
+            {poll.allow_multiple_votes && " • Multiple votes allowed"}
           </CardDescription>
         </CardHeader>
         <CardContent>

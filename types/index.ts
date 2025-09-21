@@ -12,7 +12,7 @@ export interface User {
 export interface Poll {
   id: string;
   question: string; // Changed from title to question per rules
-  options: string[]; // Array of option strings per rules
+  options: PollOption[]; // Array of PollOption objects
   votes: number[]; // Array of vote counts per rules
   created_at: string; // ISO string per rules
   created_by: string;

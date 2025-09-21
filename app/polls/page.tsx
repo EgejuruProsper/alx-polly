@@ -6,66 +6,56 @@ import { Layout } from "@/app/components/layout/layout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { Poll } from "@/types";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/app/contexts/auth-context";
+import { usePollActions } from "@/app/hooks/use-poll-actions";
+import { useAuth } from "@/app/hooks/use-auth";
+import { PollFilters } from "@/lib/poll-service";
 
 export default function PollsPage() {
-  const [polls, setPolls] = useState<Poll[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("newest");
-  const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "most-voted" | "least-voted">("newest");
+  
   const { user } = useAuth();
-
-  const fetchPolls = async (search?: string, sort?: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (sort) params.append('sortBy', sort);
-      params.append('limit', '20');
-      
-      const response = await fetch(`/api/polls?${params.toString()}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch polls');
-      }
-      
-      const data = await response.json();
-      setPolls(data.polls || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch polls');
-      setPolls([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
+  const {
+    polls,
+    isLoading,
+    error,
+    hasMore,
+    fetchPolls,
+    deletePoll,
+    submitVote,
+    clearError
+  } = usePollActions();
 
   useEffect(() => {
-    fetchPolls();
+    fetchPolls({ search: searchTerm, sortBy, limit: 20 });
   }, []);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      fetchPolls(searchTerm, sortBy);
+      fetchPolls({ search: searchTerm, sortBy, limit: 20 });
     }, 300); // Debounce search
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, sortBy]);
+  }, [searchTerm, sortBy, fetchPolls]);
 
   const handleVote = async (pollId: string, optionId: string) => {
-    // TODO: Implement actual voting logic
-    console.log("Voting for poll:", pollId, "option:", optionId);
+    // Extract option index from optionId (format: pollId-index)
+    const optionIndex = parseInt(optionId.split('-').pop() || '0');
+    await submitVote(pollId, optionIndex);
   };
 
   const handleLoadMore = () => {
-    // TODO: Implement pagination
-    console.log("Loading more polls...");
+    if (hasMore && !isLoading) {
+      fetchPolls({ 
+        search: searchTerm, 
+        sortBy: sortBy as any, 
+        limit: 20, 
+        offset: polls.length 
+      });
+    }
   };
 
   const handleDeletePoll = async (pollId: string) => {
@@ -73,21 +63,7 @@ export default function PollsPage() {
       return;
     }
 
-    try {
-      const response = await fetch(`/api/polls/${pollId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete poll');
-      }
-
-      // Remove poll from local state
-      setPolls(prevPolls => prevPolls.filter(poll => poll.id !== pollId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete poll');
-    }
+    await deletePoll(pollId);
   };
 
   return (
@@ -121,7 +97,7 @@ export default function PollsPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
               <SelectTrigger className="w-full md:w-48">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
@@ -134,23 +110,26 @@ export default function PollsPage() {
             </Select>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex justify-between items-center">
+                  <span>{error}</span>
+                  <Button variant="outline" size="sm" onClick={clearError}>
+                    Dismiss
+                  </Button>
+                </div>
+              )}
 
-          {/* Polls List */}
-          <PollList
-            polls={polls}
-            isLoading={isLoading}
-            onVote={handleVote}
-            onLoadMore={handleLoadMore}
-            onDelete={handleDeletePoll}
-            currentUserId={user?.id}
-            hasMore={false}
-          />
+              {/* Polls List */}
+              <PollList
+                polls={polls}
+                isLoading={isLoading}
+                onVote={handleVote}
+                onLoadMore={handleLoadMore}
+                onDelete={handleDeletePoll}
+                hasMore={hasMore}
+                currentUserId={user?.id}
+              />
         </div>
       </div>
     </Layout>

@@ -25,7 +25,7 @@ interface PollCardProps {
 
 export function PollCard({ poll, onVote, onDelete, currentUserId, showVoteButton = true }: PollCardProps) {
   const totalVotes = poll.options.reduce((sum, option) => sum + option.votes, 0);
-  const isExpired = poll.expiresAt && new Date() > poll.expiresAt;
+  const isExpired = poll.expires_at && new Date() > new Date(poll.expires_at);
   const isOwner = currentUserId && poll.created_by === currentUserId;
 
   return (

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/app/lib/supabase'
+import { NextRequest } from 'next/server'
+import { PollService } from '@/lib/poll-service'
+import { ApiResponse, getAuthenticatedUser, parseRequestBody, handleApiError } from '@/lib/api-utils'
 
 // GET /api/polls/[id] - Get single poll
 export async function GET(
@@ -8,56 +9,15 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const supabase = createServerSupabaseClient()
-    
-    const { data: poll, error } = await supabase
-      .from('polls')
-      .select(`
-        *,
-        author:created_by (
-          id,
-          email,
-          raw_user_meta_data
-        )
-      `)
-      .eq('id', id)
-      .eq('is_public', true)
-      .eq('is_active', true)
-      .single()
+    const result = await PollService.getPollById(id)
 
-    if (error) {
-      return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+    if (result.success && result.data) {
+      return ApiResponse.success({ poll: result.data })
+    } else {
+      return ApiResponse.notFound(result.error || 'Poll not found')
     }
-
-    // Transform the data to match our Poll interface
-    const transformedPoll = {
-      id: poll.id,
-      question: poll.question,
-      options: poll.options.map((option: string, index: number) => ({
-        id: `${poll.id}-${index}`,
-        text: option,
-        votes: poll.votes[index] || 0,
-        pollId: poll.id
-      })),
-      created_at: poll.created_at,
-      created_by: poll.created_by,
-      is_public: poll.is_public,
-      is_active: poll.is_active,
-      expires_at: poll.expires_at,
-      allow_multiple_votes: poll.allow_multiple_votes,
-      description: poll.description,
-      author: {
-        id: poll.author?.id || poll.created_by,
-        name: poll.author?.raw_user_meta_data?.name || poll.author?.email || 'Unknown User',
-        email: poll.author?.email || '',
-        createdAt: new Date(poll.created_at),
-        updatedAt: new Date(poll.created_at)
-      }
-    }
-
-    return NextResponse.json({ poll: transformedPoll })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch poll' }, { status: 500 })
+    return handleApiError(error, 'Failed to fetch poll')
   }
 }
 
@@ -68,78 +28,27 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
-    const supabase = createServerSupabaseClient()
-    
-    // Check if user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { user, error: authError } = await getAuthenticatedUser(request)
     
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'You must be logged in to edit a poll' },
-        { status: 401 }
-      )
+      return ApiResponse.unauthorized(authError)
     }
 
-    const body = await request.json()
-    const { question, options, is_public, expires_at, allow_multiple_votes, description } = body
-
-    // Check if user owns this poll
-    const { data: existingPoll, error: fetchError } = await supabase
-      .from('polls')
-      .select('created_by')
-      .eq('id', id)
-      .single()
-
-    if (fetchError || !existingPoll) {
-      return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+    const { data: updates, error: parseError } = await parseRequestBody(request)
+    
+    if (parseError || !updates) {
+      return ApiResponse.error(parseError || 'Invalid request body')
     }
 
-    if (existingPoll.created_by !== user.id) {
-      return NextResponse.json(
-        { error: 'You can only edit your own polls' },
-        { status: 403 }
-      )
+    const result = await PollService.updatePoll(id, updates, user.id)
+
+    if (result.success && result.data) {
+      return ApiResponse.success({ poll: result.data })
+    } else {
+      return ApiResponse.error(result.error || 'Failed to update poll')
     }
-
-    // Validate required fields
-    if (!question || !options || !Array.isArray(options) || options.length < 2) {
-      return NextResponse.json(
-        { error: 'Missing required fields: question and at least 2 options' },
-        { status: 400 }
-      )
-    }
-
-    // Update votes array to match new options length
-    const currentVotes = existingPoll.votes || []
-    const newVotes = new Array(options.length).fill(0)
-    // Preserve existing votes for options that still exist
-    for (let i = 0; i < Math.min(currentVotes.length, options.length); i++) {
-      newVotes[i] = currentVotes[i] || 0
-    }
-
-    const { data: poll, error } = await supabase
-      .from('polls')
-      .update({
-        question,
-        options,
-        votes: newVotes,
-        is_public: is_public,
-        expires_at,
-        allow_multiple_votes,
-        description,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ poll })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update poll' }, { status: 500 })
+    return handleApiError(error, 'Failed to update poll')
   }
 }
 
@@ -150,48 +59,20 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const supabase = createServerSupabaseClient()
-    
-    // Check if user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { user, error: authError } = await getAuthenticatedUser(request)
     
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'You must be logged in to delete a poll' },
-        { status: 401 }
-      )
+      return ApiResponse.unauthorized(authError)
     }
 
-    // Check if user owns this poll
-    const { data: existingPoll, error: fetchError } = await supabase
-      .from('polls')
-      .select('created_by')
-      .eq('id', id)
-      .single()
+    const result = await PollService.deletePoll(id, user.id)
 
-    if (fetchError || !existingPoll) {
-      return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+    if (result.success) {
+      return ApiResponse.success({ message: 'Poll deleted successfully' })
+    } else {
+      return ApiResponse.error(result.error || 'Failed to delete poll')
     }
-
-    if (existingPoll.created_by !== user.id) {
-      return NextResponse.json(
-        { error: 'You can only delete your own polls' },
-        { status: 403 }
-      )
-    }
-
-    // Delete the poll (this will also delete associated votes due to CASCADE)
-    const { error } = await supabase
-      .from('polls')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ message: 'Poll deleted successfully' })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete poll' }, { status: 500 })
+    return handleApiError(error, 'Failed to delete poll')
   }
 }

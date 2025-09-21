@@ -186,8 +186,8 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
           <CreatePollForm 
             onSubmit={handleUpdatePoll}
             isLoading={isSubmitting}
-            error={error}
-            success={success}
+            error={error || undefined}
+            success={success || undefined}
             defaultValues={formData}
           />
         </div>

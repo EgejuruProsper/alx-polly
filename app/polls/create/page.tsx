@@ -4,15 +4,15 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CreatePollForm } from "@/app/components/polls/create-poll-form";
 import { Layout } from "@/app/components/layout/layout";
-import { createPollSchema, type CreatePollFormData } from "@/lib/validations";
+import { type CreatePollFormData } from "@/lib/validations";
 import { useAuth } from "@/app/contexts/auth-context";
+import { usePollActions } from "@/app/hooks/use-poll-actions";
 
 export default function CreatePollPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { createPoll, isLoading, error, clearError } = usePollActions();
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -23,49 +23,21 @@ export default function CreatePollPage() {
 
   const handleCreatePoll = async (data: CreatePollFormData) => {
     if (!isAuthenticated) {
-      setError("You must be logged in to create a poll");
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    clearError();
     setSuccess(null);
 
-    try {
-      const response = await fetch("/api/polls", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question: data.title,
-          options: data.options,
-          is_public: data.isPublic,
-          allow_multiple_votes: data.allowMultipleVotes,
-          expires_at: data.expiresAt?.toISOString(),
-          description: data.description,
-        }),
-      });
+    const success = await createPoll(data);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create poll");
-      }
-
-      const result = await response.json();
-      console.log("Poll created successfully:", result);
-      
-      // Show success message
+    if (success) {
       setSuccess("Poll created successfully! Redirecting to polls...");
       
       // Redirect to polls page after a short delay
       setTimeout(() => {
         router.push("/polls");
       }, 2000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create poll. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -113,8 +85,8 @@ export default function CreatePollPage() {
           <CreatePollForm 
             onSubmit={handleCreatePoll}
             isLoading={isLoading}
-            error={error}
-            success={success}
+            error={error || undefined}
+            success={success || undefined}
           />
         </div>
       </div>

@@ -12,81 +12,30 @@ import { Poll } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowLeft, CheckCircle, Users, Clock } from "lucide-react";
 import Link from "next/link";
-import { supabase } from "@/app/lib/supabase";
+import { usePollActions } from "@/app/hooks/use-poll-actions";
 import { useAuth } from "@/app/contexts/auth-context";
 
 export default function PollDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [poll, setPoll] = useState<Poll | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isVoting, setIsVoting] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string>("");
   const [hasVoted, setHasVoted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const { fetchPollById, submitVote, isLoading, error, clearError } = usePollActions();
 
   // Fetch poll data
   useEffect(() => {
-    const fetchPoll = async () => {
-      try {
-        const { id } = await params;
-        
-        const { data: pollData, error: pollError } = await supabase
-          .from('polls')
-          .select(`
-            *,
-            author:created_by (
-              id,
-              email,
-              raw_user_meta_data
-            )
-          `)
-          .eq('id', id)
-          .eq('is_public', true)
-          .eq('is_active', true)
-          .single();
-
-        if (pollError) {
-          throw new Error(pollError.message);
-        }
-
-        // Transform the data to match our Poll interface
-        const transformedPoll = {
-          id: pollData.id,
-          question: pollData.question,
-          options: pollData.options.map((option: string, index: number) => ({
-            id: `${pollData.id}-${index}`,
-            text: option,
-            votes: pollData.votes[index] || 0,
-            pollId: pollData.id
-          })),
-          created_at: pollData.created_at,
-          created_by: pollData.created_by,
-          is_public: pollData.is_public,
-          is_active: pollData.is_active,
-          expires_at: pollData.expires_at,
-          allow_multiple_votes: pollData.allow_multiple_votes,
-          description: pollData.description,
-          author: {
-            id: pollData.author?.id || pollData.created_by,
-            name: pollData.author?.raw_user_meta_data?.name || pollData.author?.email || 'Unknown User',
-            email: pollData.author?.email || '',
-            createdAt: new Date(pollData.created_at),
-            updatedAt: new Date(pollData.created_at)
-          }
-        };
-
-        setPoll(transformedPoll);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch poll');
-      } finally {
-        setIsLoading(false);
+    const loadPoll = async () => {
+      const { id } = await params;
+      const pollData = await fetchPollById(id);
+      if (pollData) {
+        setPoll(pollData);
       }
     };
 
-    fetchPoll();
-  }, [params]);
+    loadPoll();
+  }, [params, fetchPollById]);
 
   const handleVote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,106 +44,24 @@ export default function PollDetailPage({ params }: { params: Promise<{ id: strin
 
     // Check if user is authenticated
     if (!isAuthenticated || !user) {
-      setError("You must be logged in to vote");
       return;
     }
 
-    setIsVoting(true);
-    setError(null);
+    clearError();
+    setSuccess(null);
 
-    try {
-      const optionIndex = poll.options.findIndex(option => option.text === selectedOption);
-      
-      // Check if poll is active and not expired
-      if (!poll.is_active) {
-        throw new Error("Poll is not active");
-      }
-
-      if (poll.expires_at && new Date(poll.expires_at) < new Date()) {
-        throw new Error("Poll has expired");
-      }
-
-      // Check if user has already voted (unless multiple votes allowed)
-      if (!poll.allow_multiple_votes) {
-        const { data: existingVote } = await supabase
-          .from('votes')
-          .select('id')
-          .eq('poll_id', poll.id)
-          .eq('voter_id', user.id)
-          .single();
-
-        if (existingVote) {
-          throw new Error("You have already voted on this poll");
-        }
-      }
-
-      // Insert the vote
-      const { data: vote, error: voteError } = await supabase
-        .from('votes')
-        .insert({
-          poll_id: poll.id,
-          option_index: optionIndex,
-          voter_id: user.id
-        })
-        .select()
-        .single();
-
-      if (voteError) {
-        throw new Error(voteError.message);
-      }
-
-      // Fetch updated poll data
-      const { data: updatedPoll, error: pollError } = await supabase
-        .from('polls')
-        .select(`
-          *,
-          author:created_by (
-            id,
-            email,
-            raw_user_meta_data
-          )
-        `)
-        .eq('id', poll.id)
-        .single();
-
-      if (pollError) {
-        throw new Error(pollError.message);
-      }
-
-      // Transform the data to match our Poll interface
-      const transformedPoll = {
-        id: updatedPoll.id,
-        question: updatedPoll.question,
-        options: updatedPoll.options.map((option: string, index: number) => ({
-          id: `${updatedPoll.id}-${index}`,
-          text: option,
-          votes: updatedPoll.votes[index] || 0,
-          pollId: updatedPoll.id
-        })),
-        created_at: updatedPoll.created_at,
-        created_by: updatedPoll.created_by,
-        is_public: updatedPoll.is_public,
-        is_active: updatedPoll.is_active,
-        expires_at: updatedPoll.expires_at,
-        allow_multiple_votes: updatedPoll.allow_multiple_votes,
-        description: updatedPoll.description,
-        author: {
-          id: updatedPoll.author?.id || updatedPoll.created_by,
-          name: updatedPoll.author?.raw_user_meta_data?.name || updatedPoll.author?.email || 'Unknown User',
-          email: updatedPoll.author?.email || '',
-          createdAt: new Date(updatedPoll.created_at),
-          updatedAt: new Date(updatedPoll.created_at)
-        }
-      };
-
-      setPoll(transformedPoll);
+    const optionIndex = poll.options.findIndex(option => option.text === selectedOption);
+    
+    const success = await submitVote(poll.id, optionIndex);
+    
+    if (success) {
       setSuccess("Thank you for voting! Your choice has been recorded.");
       setHasVoted(true);
-      
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit vote. Please try again.");
-    } finally {
-      setIsVoting(false);
+      // Update local poll state with new vote counts
+      const updatedPoll = await fetchPollById(poll.id);
+      if (updatedPoll) {
+        setPoll(updatedPoll);
+      }
     }
   };
 
@@ -296,11 +163,14 @@ export default function PollDetailPage({ params }: { params: Promise<{ id: strin
             </Alert>
           )}
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+                  {error && (
+                    <Alert variant="destructive" className="flex justify-between items-center">
+                      <AlertDescription>{error}</AlertDescription>
+                      <Button variant="outline" size="sm" onClick={clearError}>
+                        Dismiss
+                      </Button>
+                    </Alert>
+                  )}
 
           {/* Voting Form or Results */}
           <Card>
@@ -348,9 +218,9 @@ export default function PollDetailPage({ params }: { params: Promise<{ id: strin
                       </Button>
                       <Button 
                         type="submit" 
-                        disabled={isVoting || !selectedOption}
+                        disabled={isLoading || !selectedOption}
                       >
-                        {isVoting ? "Submitting Vote..." : "Submit Vote"}
+                        {isLoading ? "Submitting Vote..." : "Submit Vote"}
                       </Button>
                     </div>
                   </form>

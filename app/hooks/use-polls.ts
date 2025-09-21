@@ -40,7 +40,7 @@ export function usePolls(options: UsePollsOptions = {}): UsePollsReturn {
       const mockPolls: Poll[] = [
         {
           id: "1",
-          title: "What's your favorite programming language?",
+          question: "What's your favorite programming language?",
           description: "Help us understand the community's preferences",
           options: [
             { id: "1-1", text: "JavaScript", votes: 45, pollId: "1" },
@@ -54,11 +54,11 @@ export function usePolls(options: UsePollsOptions = {}): UsePollsReturn {
             createdAt: new Date(),
             updatedAt: new Date(),
           },
-          isActive: true,
-          isPublic: true,
-          allowMultipleVotes: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          is_active: true,
+          is_public: true,
+          allow_multiple_votes: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
       ];
       

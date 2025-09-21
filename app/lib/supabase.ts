@@ -18,7 +18,7 @@ export function createServerSupabaseClient() {
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value
+          return cookieStore.then(store => store.get(name)?.value)
         },
       },
     }
