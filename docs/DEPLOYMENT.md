@@ -346,7 +346,28 @@ sudo crontab -e
 # Add: 0 12 * * * /usr/bin/certbot renew --quiet
 ```
 
-#### 2. Nginx SSL Configuration
+#### 2. Generate DH Parameters
+
+Before configuring Nginx SSL, you need to generate Diffie-Hellman (DH) parameters for enhanced security:
+
+```bash
+# Create the SSL certificates directory
+sudo mkdir -p /etc/ssl/certs
+
+# Generate DH parameters (2048-bit recommended)
+# Note: This may take several minutes to complete
+sudo openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048
+
+# Set appropriate permissions
+sudo chmod 644 /etc/ssl/certs/dhparam.pem
+```
+
+**Important Notes:**
+- The 2048-bit length is recommended for security and performance balance
+- Generation may take 5-15 minutes depending on your server's CPU
+- The file will be referenced in the Nginx SSL configuration below
+
+#### 3. Nginx SSL Configuration
 ```nginx
 server {
     listen 443 ssl http2;

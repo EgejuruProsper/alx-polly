@@ -93,8 +93,12 @@ export function RealtimePoll({
       
       // Validate option_index
       const optionIndex = payload.new.option_index;
-      if (!Number.isFinite(optionIndex) || optionIndex < 0 || optionIndex >= (payload.new.votes?.length || 0)) {
-        console.warn('Invalid option_index in vote update:', optionIndex);
+      if (!Number.isInteger(optionIndex) || !payload.new.options || !Array.isArray(payload.new.options)) {
+        console.warn('Invalid option_index in vote update: options missing or not an array', { optionIndex, options: payload.new.options });
+        return; // Skip invalid vote updates
+      }
+      if (optionIndex < 0 || optionIndex >= payload.new.options.length) {
+        console.warn('Invalid option_index in vote update: index out of bounds', { optionIndex, optionsLength: payload.new.options.length });
         return; // Skip invalid vote updates
       }
       

@@ -21,14 +21,16 @@ import { RealtimeChannel } from '@supabase/supabase-js';
  * - Channel conflicts → proper cleanup
  * - Memory leaks → subscription management
  */
+// Generic subscription metadata interface
+interface SubscriptionMetadata {
+  type: 'poll' | 'user-notifications' | 'system-updates';
+  createChannel: (supabase: any, channelName: string) => RealtimeChannel;
+  onError: (error: any) => void;
+}
+
 export class RealtimeService {
   private static channels: Map<string, RealtimeChannel> = new Map();
-  private static subscriptionMetadata: Map<string, {
-    pollId: string;
-    onUpdate: (payload: any) => void;
-    onVote: (payload: any) => void;
-    onError: (error: any) => void;
-  }> = new Map();
+  private static subscriptionMetadata: Map<string, SubscriptionMetadata> = new Map();
 
   /**
    * Subscribe to poll updates
@@ -52,9 +54,50 @@ export class RealtimeService {
     
     // Store subscription metadata for reconnection
     this.subscriptionMetadata.set(channelName, {
-      pollId,
-      onUpdate,
-      onVote,
+      type: 'poll',
+      createChannel: (supabase, channelName) => {
+        return supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'polls',
+              filter: `id=eq.${pollId}`
+            },
+            (payload) => {
+              console.log('Poll updated:', payload);
+              onUpdate(payload);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'votes',
+              filter: `poll_id=eq.${pollId}`
+            },
+            (payload) => {
+              console.log('New vote:', payload);
+              onVote(payload);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'poll_analytics',
+              filter: `poll_id=eq.${pollId}`
+            },
+            (payload) => {
+              console.log('Analytics event:', payload);
+              // Handle analytics updates if needed
+            }
+          );
+      },
       onError
     });
     
@@ -63,47 +106,7 @@ export class RealtimeService {
       this.channels.get(channelName)?.unsubscribe();
     }
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'polls',
-          filter: `id=eq.${pollId}`
-        },
-        (payload) => {
-          console.log('Poll updated:', payload);
-          onUpdate(payload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'votes',
-          filter: `poll_id=eq.${pollId}`
-        },
-        (payload) => {
-          console.log('New vote:', payload);
-          onVote(payload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'poll_analytics',
-          filter: `poll_id=eq.${pollId}`
-        },
-        (payload) => {
-          console.log('Analytics event:', payload);
-          // Handle analytics updates if needed
-        }
-      )
+    const channel = this.subscriptionMetadata.get(channelName)!.createChannel(supabase, channelName)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log(`Subscribed to poll ${pollId}`);
@@ -135,39 +138,48 @@ export class RealtimeService {
   ): RealtimeChannel {
     const channelName = `user-${userId}`;
     
+    // Store subscription metadata for reconnection
+    this.subscriptionMetadata.set(channelName, {
+      type: 'user-notifications',
+      createChannel: (supabase, channelName) => {
+        return supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notifications',
+              filter: `user_id=eq.${userId}`
+            },
+            (payload) => {
+              console.log('New notification:', payload);
+              onNotification(payload);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'user_profiles',
+              filter: `id=eq.${userId}`
+            },
+            (payload) => {
+              console.log('Profile updated:', payload);
+              // Handle profile updates if needed
+            }
+          );
+      },
+      onError
+    });
+    
     // Clean up existing subscription
     if (this.channels.has(channelName)) {
       this.channels.get(channelName)?.unsubscribe();
     }
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          console.log('New notification:', payload);
-          onNotification(payload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'user_profiles',
-          filter: `id=eq.${userId}`
-        },
-        (payload) => {
-          console.log('Profile updated:', payload);
-          // Handle profile updates if needed
-        }
-      )
+    const channel = this.subscriptionMetadata.get(channelName)!.createChannel(supabase, channelName)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log(`Subscribed to user ${userId} notifications`);
@@ -199,49 +211,58 @@ export class RealtimeService {
   ): RealtimeChannel {
     const channelName = 'system-updates';
     
+    // Store subscription metadata for reconnection
+    this.subscriptionMetadata.set(channelName, {
+      type: 'system-updates',
+      createChannel: (supabase, channelName) => {
+        return supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'user_profiles'
+            },
+            (payload) => {
+              console.log('New user registered:', payload);
+              onUserUpdate(payload);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'polls'
+            },
+            (payload) => {
+              console.log('New poll created:', payload);
+              onPollUpdate(payload);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'votes'
+            },
+            (payload) => {
+              console.log('New vote cast:', payload);
+              // Handle system-wide vote updates if needed
+            }
+          );
+      },
+      onError
+    });
+    
     // Clean up existing subscription
     if (this.channels.has(channelName)) {
       this.channels.get(channelName)?.unsubscribe();
     }
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'user_profiles'
-        },
-        (payload) => {
-          console.log('New user registered:', payload);
-          onUserUpdate(payload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'polls'
-        },
-        (payload) => {
-          console.log('New poll created:', payload);
-          onPollUpdate(payload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'votes'
-        },
-        (payload) => {
-          console.log('New vote cast:', payload);
-          // Handle system-wide vote updates if needed
-        }
-      )
+    const channel = this.subscriptionMetadata.get(channelName)!.createChannel(supabase, channelName)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('Subscribed to system updates');
@@ -335,28 +356,8 @@ export class RealtimeService {
           try {
             console.log(`Reconnecting to ${channelName} (attempt ${retryCount + 1})`);
             
-            const channel = supabase
-              .channel(channelName)
-              .on(
-                'postgres_changes',
-                {
-                  event: 'UPDATE',
-                  schema: 'public',
-                  table: 'polls',
-                  filter: `id=eq.${metadata.pollId}`
-                },
-                metadata.onUpdate
-              )
-              .on(
-                'postgres_changes',
-                {
-                  event: 'INSERT',
-                  schema: 'public',
-                  table: 'votes',
-                  filter: `poll_id=eq.${metadata.pollId}`
-                },
-                metadata.onVote
-              )
+            // Use the stored metadata to recreate the channel
+            const channel = metadata.createChannel(supabase, channelName)
               .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
                   console.log(`Successfully reconnected to ${channelName}`);
